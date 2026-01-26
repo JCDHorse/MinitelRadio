@@ -19,8 +19,9 @@
 
 class WebRadioReceiver {
 private:
-  static constexpr size_t CHANNEL_COUNT = 8;
-  static const char *CHANNELS[CHANNEL_COUNT];
+  static constexpr size_t CHANNEL_COUNT = 6;
+  static const char *CHANNELS_NAME[CHANNEL_COUNT];
+  static const char *CHANNELS_URL[CHANNEL_COUNT];
 
   ESP32_VS1053_Stream m_stream;
 
@@ -30,11 +31,14 @@ private:
   uint8_t m_tone[4];
   uint8_t m_spatial = 0;
 
+  QueueHandle_t m_evt_queue = nullptr;
+
 public:
   explicit WebRadioReceiver(WiFiClient &_wifi_client);
   void loop();
   void handle_command();
   void init();
+  void set_evt_queue(QueueHandle_t queue);
 
   // Channels
   void connect_channel();

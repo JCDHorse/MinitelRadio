@@ -7,19 +7,27 @@
 #include "WebRadioReceiver.h"
 
 #include "CharQueue.h"
+#include "Commands.h"
 #include "mqtt.h"
 
 static CharQueue awaiting_cmds;
 
-const char *WebRadioReceiver::CHANNELS[CHANNEL_COUNT] = {
+const char *WebRadioReceiver::CHANNELS_NAME[CHANNEL_COUNT] = {
+  "SomaFM/70s",
+  "ZenoLive",
+  "RTL",
+  "RTBF/Metal",
+  "France Inter",
+  "Lyon 1ere",
+};
+
+const char *WebRadioReceiver::CHANNELS_URL[CHANNEL_COUNT] = {
   "http://ice4.somafm.com/seventies-128-mp3",
   "http://stream.zenolive.com/507dzk77gkeuv",
-  "http://streamer-03.rtl.fr/rtl-1-44-64?listen=webCwsBCggNCQgLDQUGBAcGBg;",
   "http://icecast.rtl.fr/rtl-1-44-64",
   "http://radios.rtbf.be/wr-c21-metal-128.mp3",
   "http://direct.franceinter.fr/live/franceinter-midfi.aac",
   "http://lyon1ere.ice.infomaniak.ch/lyon1ere-high.mp3",
-  "http://stream.rcs.revma.com/5gd04cwptg0uv",
 };
 
 WebRadioReceiver::WebRadioReceiver(WiFiClient &_wifi_client)
@@ -106,6 +114,11 @@ void WebRadioReceiver::init() {
   connect_channel();
 }
 
+void WebRadioReceiver::set_evt_queue(QueueHandle_t queue)
+{
+  m_evt_queue = queue;
+}
+
 void WebRadioReceiver::connect_channel() {
   static char msg[MQTT_MSG_BUFFER_SIZE];
 
@@ -113,14 +126,24 @@ void WebRadioReceiver::connect_channel() {
 
   m_stream.stopSong();
   Serial.print("Demande du stream: ");
-  Serial.println(CHANNELS[m_channel]);
+  Serial.println(CHANNELS_URL[m_channel]);
 
-  const char* channel_url = CHANNELS[m_channel];
+  const char* channel_url = CHANNELS_URL[m_channel];
 
-  snprintf(msg, MQTT_MSG_BUFFER_SIZE, "Changement de chaine radio: %s", channel_url);
+  //snprintf(msg, MQTT_MSG_BUFFER_SIZE, "Changement de chaine radio: %s", channel_url);
   // mqtt::publish(m_mqtt, "webradio/inTopic", msg);
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi non prêt, annulation de la connexion");
+    return;
+  }
+
   m_stream.connecttohost(channel_url);
 
+  AudioEvent evt = {};
+  evt.type = EVT_STATION_NAME;
+  strncpy(evt.text, CHANNELS_NAME[m_channel], sizeof(evt.text));
+  xQueueSend(m_evt_queue, &evt, 0);
 }
 
 void WebRadioReceiver::next_channel() {

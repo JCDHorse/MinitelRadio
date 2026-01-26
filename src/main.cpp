@@ -1,37 +1,30 @@
 #include <Minitel1B_Hard.h>  // Voir https://github.com/eserandour/Minitel1B_Hard
 #include <WiFiManager.h>
 
+#include "Commands.h"
+#include "Minitel.h"
 #include "WebRadioReceiver.h"
 
-Minitel minitel(Serial2);
 
 ////////////////////////////////////////////////////////////////////////
 
 #define TITRE "3615 - WebRadio"
 
-String texte="";
-int nbCaracteres=0;
-const int PREMIERE_LIGNE_EXPRESSION = 4;
-const int NB_LIGNES_EXPRESSION = 7;
-const String VIDE = ".";
-
 unsigned long touche;
 
+MinitelUI minitel(Serial2);
 WiFiClient wifi_client;
 WiFiManager wifi_manager;
 
 WebRadioReceiver wr_rcv(wifi_client);
 
-////////////////////////////////////////////////////////////////////////
+// Queue des commandes audio
+QueueHandle_t audio_cmd_queue;
+// Queue des évenements audio
+QueueHandle_t audio_evt_queue;
 
-void newPage(String titre) {
-  minitel.newScreen();
-  minitel.println(titre);
-  for (int i=1; i<=40; i++) {
-    minitel.writeByte(0x7E);
-  }
-}
-////////////////////////////////////////////////////////////////////////
+MinitelRadio *minitel_radio = nullptr;
+
 
 #define MENU_ITEM_COUNT 2
 const char *MENU_ITEMS[MENU_ITEM_COUNT] = {
@@ -101,9 +94,34 @@ void audioTask(void* data) {
     vTaskDelay(500 / portTICK_PERIOD_MS);
     Serial.println("AudioTask: Still waiting for WiFi...");
   }
+  // Laisse le temps a tout les systèmes du réseau de bien se lancer
+  vTaskDelay(2000 / portTICK_PERIOD_MS);
+
+  Command audio_cmd;
+
   for(;;) {
     wr_rcv.loop();
-    // ESSENTIEL : Donne du temps au processeur pour les tâches de fond
+
+    if (xQueueReceive(audio_cmd_queue, &audio_cmd, 0) == pdTRUE) {
+      switch (audio_cmd.type) {
+      case CMD_AUDIO_NEXT_RADIO:
+        wr_rcv.next_channel();
+        break;
+      case CMD_AUDIO_PREV_RADIO:
+        wr_rcv.prev_channel();
+        break;
+      case CMD_AUDIO_VOLUME_UP:
+        wr_rcv.volume_up();
+        break;
+      case CMD_AUDIO_VOLUME_DOWN:
+        wr_rcv.volume_down();
+        break;
+      default:
+        break;
+      }
+
+    }
+
     vTaskDelay(1);
   }
 }
@@ -112,13 +130,25 @@ void audioTask(void* data) {
 
 void setup() {
   Serial.begin(115200);
-  minitel.changeSpeed(minitel.searchSpeed());
+  int speed = minitel.searchSpeed();
+  minitel.changeSpeed(speed);
   minitel.smallMode();
-  newPage(TITRE);
   Serial.println("\n\n3615 - WebRadio");
   Serial.println("");
 
   Serial.println("Controles: ");
+
+  minitel.newScreen();
+
+  minitel.attributs(DOUBLE_GRANDEUR);
+  minitel.println("3615 WEBRADIO");
+  minitel.attributs(GRANDEUR_NORMALE);
+  minitel.bip();
+  delay(100);
+  minitel.print("Connexion au minitel a ");
+  minitel.print(String(speed));
+  minitel.println(" bauds.");
+
 
   Serial.print("Connexion au reseau ");
   minitel.println("Connexion au réseau...");
@@ -144,11 +174,23 @@ void setup() {
 
   Serial.println("Initialisation de l'audio...");
   minitel.println("Initialisation de l'audio...");
+  minitel.println("Audio initialisé !");
+  minitel.bip();
+  delay(1000);
+
+  // Initialisation des queues
+  audio_cmd_queue = xQueueCreate(10, sizeof(Command));
+  audio_evt_queue = xQueueCreate(5, sizeof(AudioEvent));
+
+  wr_rcv.set_evt_queue(audio_evt_queue);
   wr_rcv.init();
 
   // Priorité 5, on lance l'audio sur le core 0
   xTaskCreatePinnedToCore(audioTask, "AudioTask", 20000,
     NULL, 5, NULL, 0);
+
+  minitel_radio = new MinitelRadio(minitel, audio_cmd_queue, audio_evt_queue);
+  minitel_radio->refresh();
 }
 
 
@@ -161,11 +203,9 @@ bool main_menu_on = true;
 int choice = 0;
 
 void loop() {
-// Affichage de la page
-  newPage(TITRE);
   String wifi_name = wifi_manager.getWiFiSSID();
-  show_wifi(wifi_name);
-  choice = main_menu();
-
-  Serial.println(choice);
+  minitel_radio->set_wifi(wifi_name);
+  minitel_radio->set_mode(WEB_RADIO);
+  minitel_radio->handle_audio_events();
+  minitel_radio->radio_page();
 }
