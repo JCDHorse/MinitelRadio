@@ -19,18 +19,22 @@ enum RadioMode {
 
 class MinitelRadio {
 public:
-    MinitelRadio(const MinitelUI &minitel, QueueHandle_t &audio_cmd_queue, QueueHandle_t &audio_evt_queue);
+    MinitelRadio(const Minitel &minitel, QueueHandle_t &audio_cmd_queue, QueueHandle_t &audio_evt_queue);
     void new_page();
+    void show_logline(String &log);
+    void clear_logline();
     void show_wifi();
     void show_mode();
     void radio_page();
     void refresh();
     void handle_audio_events();
+    void handle_keyboard();
 
     void set_wifi(const String& wifi_name);
     void set_mode(RadioMode mode);
+
 private:
-    MinitelUI m_minitel;
+    Minitel m_minitel;
     int m_selection = 0;
     bool m_refresh = false;
     bool m_station_dirty = false;

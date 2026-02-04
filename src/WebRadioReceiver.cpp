@@ -1,33 +1,37 @@
-//
-// Created by justine on 20/12/25.
-//
-
 #include <HardwareSerial.h>
 
 #include "WebRadioReceiver.h"
 
 #include "CharQueue.h"
 #include "Commands.h"
-#include "mqtt.h"
 
 static CharQueue awaiting_cmds;
 
-const char *WebRadioReceiver::CHANNELS_NAME[CHANNEL_COUNT] = {
-  "SomaFM/70s",
-  "ZenoLive",
-  "RTL",
-  "RTBF/Metal",
-  "France Inter",
-  "Lyon 1ere",
-};
-
-const char *WebRadioReceiver::CHANNELS_URL[CHANNEL_COUNT] = {
-  "http://ice4.somafm.com/seventies-128-mp3",
-  "http://stream.zenolive.com/507dzk77gkeuv",
-  "http://icecast.rtl.fr/rtl-1-44-64",
-  "http://radios.rtbf.be/wr-c21-metal-128.mp3",
-  "http://direct.franceinter.fr/live/franceinter-midfi.aac",
-  "http://lyon1ere.ice.infomaniak.ch/lyon1ere-high.mp3",
+const RadioInfo WebRadioReceiver::radios[CHANNEL_COUNT] = {
+  {
+    .name = "SomaFM/70s",
+    .url = "http://ice4.somafm.com/seventies-128-mp3",
+  },
+  {
+  .name = "ZenoLive",
+  .url = "http://stream.zenolive.com/507dzk77gkeuv",
+  },
+  {
+    .name = "RTL",
+    .url = "http://icecast.rtl.fr/rtl-1-44-64",
+  },
+  {
+    .name = "RTBF/Metal",
+    .url = "http://radios.rtbf.be/wr-c21-metal-128.mp3",
+  },
+  {
+    .name = "France Inter",
+    .url = "http://direct.franceinter.fr/live/franceinter-midfi.aac",
+  },
+  {
+    .name = "Lyon 1ere",
+    .url = "http://lyon1ere.ice.infomaniak.ch/lyon1ere-high.mp3",
+  },
 };
 
 WebRadioReceiver::WebRadioReceiver(WiFiClient &_wifi_client)
@@ -47,10 +51,6 @@ void msg_callback(const char * topic, const byte * payload, const unsigned int l
 }
 
 void WebRadioReceiver::loop() {
-  // if (!m_mqtt.connected()) {
-  //   mqtt::reconnect(m_mqtt);
-  // }
-  // m_mqtt.loop();
   m_stream.loop();
   handle_command();
 }
@@ -120,29 +120,26 @@ void WebRadioReceiver::set_evt_queue(QueueHandle_t queue)
 }
 
 void WebRadioReceiver::connect_channel() {
-  static char msg[MQTT_MSG_BUFFER_SIZE];
-
   Serial.print("Connection a ");
 
   m_stream.stopSong();
+
+  const RadioInfo &radio = radios[m_channel];
+
   Serial.print("Demande du stream: ");
-  Serial.println(CHANNELS_URL[m_channel]);
-
-  const char* channel_url = CHANNELS_URL[m_channel];
-
-  //snprintf(msg, MQTT_MSG_BUFFER_SIZE, "Changement de chaine radio: %s", channel_url);
-  // mqtt::publish(m_mqtt, "webradio/inTopic", msg);
+  Serial.println(radio.url);
 
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi non prêt, annulation de la connexion");
     return;
   }
 
-  m_stream.connecttohost(channel_url);
+  m_stream.connecttohost(radio.url);
 
   AudioEvent evt = {};
   evt.type = EVT_STATION_NAME;
-  strncpy(evt.text, CHANNELS_NAME[m_channel], sizeof(evt.text));
+  strncpy(evt.text, radio.name, sizeof(evt.text));
+  evt.text[sizeof(evt.text) - 1] = '\0';
   xQueueSend(m_evt_queue, &evt, 0);
 }
 

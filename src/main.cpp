@@ -5,14 +5,11 @@
 #include "Minitel.h"
 #include "WebRadioReceiver.h"
 
-
-////////////////////////////////////////////////////////////////////////
-
 #define TITRE "3615 - WebRadio"
 
 unsigned long touche;
 
-MinitelUI minitel(Serial2);
+Minitel minitel(Serial2);
 WiFiClient wifi_client;
 WiFiManager wifi_manager;
 
@@ -24,69 +21,6 @@ QueueHandle_t audio_cmd_queue;
 QueueHandle_t audio_evt_queue;
 
 MinitelRadio *minitel_radio = nullptr;
-
-
-#define MENU_ITEM_COUNT 2
-const char *MENU_ITEMS[MENU_ITEM_COUNT] = {
-  "Sélectionner la radio",
-  "Écouter la radio",
-};
-int selection = 0;
-
-void show_menu() {
-//  newPage(TITRE);
-  int x0 = 8, y0 = 10;
-
-  for (int i = 0; i < MENU_ITEM_COUNT; i++) {
-    minitel.moveCursorXY(x0, y0 + i);
-    minitel.clearLineFromCursor();
-
-    if (selection == i) {
-      minitel.attributs(FOND_MAGENTA);
-    } else {
-      minitel.attributs(FOND_NORMAL);
-    }
-    minitel.print(String(i));
-    minitel.print(". ");
-    minitel.attributs(FOND_NORMAL);
-    minitel.println(MENU_ITEMS[i]);
-    minitel.clearLineFromCursor();
-  }
-  minitel.noCursor();
-}
-
-void show_wifi(String &wifi_name) {
-  minitel.moveCursorXY(25, 0);
-  minitel.clearLineFromCursor();
-  minitel.print("WiFi: ");
-  minitel.print(wifi_name);
-}
-
-int main_menu() {
-  show_menu();
-  bool selected = false;
-  while (!selected) {
-    touche = minitel.getKeyCode(true);
-    if (touche == ENVOI) {
-      selected = true;
-    }
-    else if (touche == 'j') {
-      selection = (selection + 1) % MENU_ITEM_COUNT;
-      show_menu();
-    } else if (touche == 'k') {
-      if (selection == 0) {
-        selection = MENU_ITEM_COUNT - 1;
-      }
-      else {
-        selection--;
-      }
-      show_menu();
-    }
-    // Permet de rendre la main au scheduler
-    delay(1);
-  }
-  return selection;
-}
 
 void audioTask(void* data) {
   vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -126,7 +60,6 @@ void audioTask(void* data) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////
 
 void setup() {
   Serial.begin(115200);
@@ -154,6 +87,7 @@ void setup() {
   minitel.println("Connexion au réseau...");
 
   const bool res = wifi_manager.autoConnect("Justine-ESP32");
+
   if (!res) {
     Serial.println("Failed to connect");
     minitel.println("Échec de la connexion.");
@@ -161,7 +95,6 @@ void setup() {
     delay(2000);
     ESP.restart();
   }
-
 
   Serial.println("WiFi connected");
   minitel.println("Wifi connecté !");
@@ -193,19 +126,11 @@ void setup() {
   minitel_radio->refresh();
 }
 
-
-////////////////////////////////////////////////////////////////////////
-///
-///
-///
-
-bool main_menu_on = true;
-int choice = 0;
-
 void loop() {
   String wifi_name = wifi_manager.getWiFiSSID();
   minitel_radio->set_wifi(wifi_name);
   minitel_radio->set_mode(WEB_RADIO);
   minitel_radio->handle_audio_events();
   minitel_radio->radio_page();
+  minitel_radio->handle_keyboard();
 }

@@ -6,7 +6,6 @@
 #define WEBRADIO_H
 
 #include "ESP32_VS1053_Stream.h"
-#include "VS1053.h"
 
 #define SPI_CLK_PIN 5
 #define SPI_MISO_PIN 19
@@ -16,12 +15,16 @@
 #define VS1053_DCS 33
 #define VS1053_DREQ 15
 
+struct RadioInfo {
+  const char *name;
+  const char *url;
+};
+
 
 class WebRadioReceiver {
 private:
   static constexpr size_t CHANNEL_COUNT = 6;
-  static const char *CHANNELS_NAME[CHANNEL_COUNT];
-  static const char *CHANNELS_URL[CHANNEL_COUNT];
+  static const RadioInfo radios[CHANNEL_COUNT];
 
   ESP32_VS1053_Stream m_stream;
 

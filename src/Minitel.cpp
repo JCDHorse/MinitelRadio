@@ -2,7 +2,10 @@
 // Created by justine on 25/01/26.
 //
 
+#include <Minitel1B_Hard.h>
+
 #include "Minitel.h"
+
 
 #include "Commands.h"
 
@@ -13,7 +16,8 @@ static const char *MENU_ITEMS[MENU_ITEMS_COUNT] = {
   };
 
 
-MinitelRadio::MinitelRadio(const MinitelUI &minitel, QueueHandle_t &audio_cmd_queue, QueueHandle_t &audio_evt_queue)
+MinitelRadio::MinitelRadio(const Minitel &minitel,
+    QueueHandle_t &audio_cmd_queue, QueueHandle_t &audio_evt_queue)
     : m_minitel(minitel), m_audio_cmd_queue(audio_cmd_queue), m_audio_evt_queue(audio_evt_queue)
 {
     m_minitel.changeSpeed(m_minitel.searchSpeed());
@@ -28,6 +32,17 @@ void MinitelRadio::new_page()
     show_wifi();
     show_mode();
     m_minitel.hLine(0, 2, WIDTH - 1, CENTER);
+}
+
+void MinitelRadio::show_logline(String &log) {
+    m_minitel.moveCursorXY(0, 12);
+    m_minitel.println(log);
+    m_minitel.clearLineFromCursor();
+}
+
+void MinitelRadio::clear_logline() {
+    m_minitel.moveCursorXY(0, 12);
+    m_minitel.clearLineFromCursor();
 }
 
 void MinitelRadio::show_wifi()
@@ -91,36 +106,9 @@ void MinitelRadio::radio_page()
         m_minitel.print(m_station_name);
 
         m_station_dirty = false;
+        clear_logline();
     }
 
-    Command cmd = {};
-    const int touch = m_minitel.getKeyCode(true);
-    switch (touch)
-    {
-    case SUITE:
-        cmd.type = CMD_AUDIO_NEXT_RADIO;
-        cmd.value = 1;
-        m_minitel.moveCursorXY(0, 10);
-        break;
-    case RETOUR:
-        cmd.type = CMD_AUDIO_PREV_RADIO;
-        m_minitel.moveCursorXY(0, 10);
-        cmd.value = -1;
-        break;
-    case 'A':
-    case 'a':
-        cmd.type = CMD_AUDIO_VOLUME_UP;
-        cmd.value = +1;
-        break;
-    case 'Q':
-    case 'q':
-        cmd.type = CMD_AUDIO_VOLUME_DOWN;
-        cmd.value = -1;
-        break;
-    default:
-        return;
-    }
-    xQueueSend(m_audio_cmd_queue, &cmd, 0);
 }
 
 void MinitelRadio::refresh()
@@ -130,7 +118,7 @@ void MinitelRadio::refresh()
 
 void MinitelRadio::handle_audio_events()
 {
-    AudioEvent evt;
+    AudioEvent evt = {};
 
     while (xQueueReceive(m_audio_evt_queue, &evt, 0) == pdTRUE) {
         switch (evt.type) {
@@ -140,6 +128,41 @@ void MinitelRadio::handle_audio_events()
             break;
         }
     }
+}
+
+void MinitelRadio::handle_keyboard() {
+    String logline = "";
+    Command cmd = {};
+    const unsigned long touch = m_minitel.getKeyCode(true);
+    switch (touch)
+    {
+        case SUITE:
+            cmd.type = CMD_AUDIO_NEXT_RADIO;
+            logline = "Station suivante...";
+            cmd.value = 1;
+            break;
+        case RETOUR:
+            cmd.type = CMD_AUDIO_PREV_RADIO;
+            logline = "Station précédente...";
+            cmd.value = -1;
+            break;
+        case 'A':
+        case 'a':
+            cmd.type = CMD_AUDIO_VOLUME_UP;
+            cmd.value = +1;
+            break;
+        case 'Q':
+        case 'q':
+            cmd.type = CMD_AUDIO_VOLUME_DOWN;
+            cmd.value = -1;
+            break;
+        default:
+            return;
+    }
+    if (!logline.isEmpty()) {
+        show_logline(logline);
+    }
+    xQueueSend(m_audio_cmd_queue, &cmd, 0);
 }
 
 void MinitelRadio::set_wifi(const String& wifi_name)
